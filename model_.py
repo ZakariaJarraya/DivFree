@@ -103,7 +103,7 @@ class ResNet(nn.Module):
         return logits, probas
 
 
-
+"""
 def train_epoch(model, Y, X, criterion, opt, batch_size=100):
     model.train()
     #Y=dynamic_i(X)
@@ -131,7 +131,7 @@ def train_epoch(model, Y, X, criterion, opt, batch_size=100):
 
 
 
-def train_epoch(model, Y, X, criterion, opt, alpha, batch_size=100):
+def train_epoch(model, penalization, Y, X, criterion, opt, alpha, batch_size=100):
     model.train()
     #Y=dynamic_i(X)
     losses = []
@@ -145,8 +145,11 @@ def train_epoch(model, Y, X, criterion, opt, alpha, batch_size=100):
         x_batch.requires_grad=True
         y_hat = model(x_batch)
         logits, probas = model(x_batch)
-        penal = nn.MSELoss()
-        loss=criterion(logits, y_batch.view(logits.size()[0]).long()) + alpha * penal(div(model.g,x_batch), 0*torch.ones(len(x_batch)).to('cuda'))
+        if penalization:
+            penal = nn.MSELoss()
+            loss=criterion(logits, y_batch.view(logits.size()[0]).long()) + alpha * penal(div(model.g,x_batch), 0*torch.ones(len(x_batch)).to('cuda'))
+        else:
+            loss=criterion(logits, y_batch.view(logits.size()[0]).long())    
         # (2) Compute diff
         # (3) Compute gradients
         loss.backward(retain_graph=True)
@@ -160,12 +163,12 @@ def train_epoch(model, Y, X, criterion, opt, alpha, batch_size=100):
 
 
 
-def train(model,X,Y,alpha,num_epochs=100):
+def train(model,penalization,X,Y,alpha,num_epochs=100):
     opt = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
     criterion = nn.CrossEntropyLoss()
     e_losses = []
     for e in range(num_epochs):
-        e_losses += train_epoch(model, Y, X, criterion, opt, alpha)
+        e_losses += train_epoch(model, penalization, Y, X, criterion, opt, alpha)
     #plt.plot(e_losses)          
 
 """
@@ -175,10 +178,10 @@ def train(model,X,Y,num_epochs=100):
     criterion = nn.CrossEntropyLoss()
     e_losses = []
     for e in range(num_epochs):
-        e_losses += train_epoch(model, Y, X, criterion, opt)
+        e_losses += train_epoch(model, penalization, Y, X, criterion, opt)
     #plt.plot(e_losses)       
     
-
+"""
 
 
 

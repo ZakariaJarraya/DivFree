@@ -9,6 +9,7 @@ from model_ import *
 from dynamic import *
 from metric import *
 from sklearn import preprocessing
+import argparse
 
 
 
@@ -43,15 +44,22 @@ for i in range(len(methodes)):
 
 methode=input('')   
 
+donnee=int(donnee)
+methode=int(methode)
 
-alpha=input('saisir le coefficient de pénalisation')
+
+penalization=(methode==3)
+alpha=0
+if penalization:
+    alpha=int(input('saisir le coefficient de pénalisation'))
+
+
 
 
 
 ##creation des donnees
 
-donnee=int(donnee)
-methode=int(methode)
+
 
 def create_data(donnee,taille):
     if donnee==0:
@@ -94,12 +102,13 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random
 
 
 def g(methode):
-    if int(methode)==0:
+    if int(methode)==0 or int(methode)==3:
         return unconstrained_dynamic()
     elif int(methode)==1:
         return divfree_dynamic()
     elif int(methode)==2:
         return grad_potential_dynamic()
+
 
 
 
@@ -161,21 +170,32 @@ def animate_reseau(i):
 
 
 
-"""
-for j in range(-5,10):
-    alpha=pow(10,j)
-    for i in range(20):
+
+Score=[]
+V_inter=[]
+V_intra=[]
+Distortion=[]
+Adv=[]
+J_norm=[]
+Energy=[]
+for i in range(20):
         print(i)
         print(alpha)
         torch.manual_seed(i)
         model=ResNet(g(methode), 10, 0.1)
         model=model.to('cuda')
-        train(model,x_train,y_train,alpha)
-        torch.save(model, '/home/zakaria/Bureau/projet-lyapunov/lambda-models/'+'-'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(i)+'-'+str(alpha))
-
-
-
+        train(model,penalization,x_train,y_train,alpha,100)
+        Score.append(acc(model,x_test,y_test))
+        V_inter.append(variance_inter(last_layer(model,x_test),y_test).item())
+        V_intra.append(variance_intra(last_layer(model,x_test),y_test).item())
+        Distortion.append(lq_distortion(model,x_test).item())
+        Adv.append(acc(model,test(model, x_test, y_test, 0.1),y_test))
+        Energy.append(energy(model,x_test))
+        #torch.save(model, '/home/zakaria/Bureau/projet-lyapunov/lambda-models/'+'-'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(i)+'-'+str(alpha))
         
+
+
+"""      
 def create_spiral(taille,longueur):
             random.seed(1)
             N = int(taille/2)
@@ -336,7 +356,7 @@ train(model,x_train,y_train)
 
 
 
-"""
+
 
 
 def plot_decision_boundary(network,x,y,i):
@@ -363,3 +383,26 @@ def plot_decision_boundary(network,x,y,i):
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap))    
     plt.scatter(x[:, 0], x[:, 1], cmap=plt.cm.binary)     
     plt.savefig('/home/zakaria/Bureau/projet-lyapunov/spiral-unroll/'+str(i)+'.png')     
+
+
+
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

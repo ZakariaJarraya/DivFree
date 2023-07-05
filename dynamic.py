@@ -202,3 +202,27 @@ class ConvexPotentialLayerLinear(nn.Module):
         res = self.activation(res)
         res = FA.linear(res, self.mat.weight.t())
         return res
+
+
+
+class get_grad(nn.Module):
+    def __init__(self,fonction):
+        super(get_grad, self).__init__()
+        self.fonction=fonction
+    def forward(self, x): 
+        #x=torch.sum(torch.stack([torch.autograd.grad(self.fonction(x[i]),x, create_graph=True)[0] for i in range(len(x))]),dim=0)
+        x=torch.autograd.grad(self.fonction(x),x,grad_outputs=torch.ones_like(self.fonction(x)), create_graph=True)[0]
+        #x=x.view(-1,2)
+        x=x.view(-1,2)    
+        return -x      
+
+
+
+
+
+def grad_potential_dynamic():
+    fonction=scalar(2,128,1)
+    fonction=fonction.to(torch.device("cuda:0"))
+    F=get_grad(fonction)
+    F=F.to(torch.device("cuda:0"))
+    return F

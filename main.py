@@ -20,7 +20,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 torch.manual_seed(0)
 
-methodes=['Baseline','DivFree','Lyapunov','Penalizaion','neurips','NICE']
+methodes=['Baseline','DivFree','Lyapunov','Penalizaion']
 
 donnees=['Moons','Spirals','Gaussian']
 

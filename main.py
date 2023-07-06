@@ -192,7 +192,18 @@ for i in range(20):
         Adv.append(acc(model,test(model, x_test, y_test, 0.1),y_test))
         Energy.append(energy(model,x_test))
         #torch.save(model, '/home/zakaria/Bureau/projet-lyapunov/lambda-models/'+'-'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(i)+'-'+str(alpha))
-        
+
+
+print('Accuracy : ' + str(np.mean(Score)) + ' +/- ' + str(np.std(Score)))
+print('Inter-class variance : ' + str(np.mean(V_inter)) + ' +/- ' + str(np.std(V_inter)))
+print('Intra-class variance : ' + str(np.mean(V_intra)) + ' +/- ' + str(np.std(V_intra)))
+print('Distortion : ' + str(np.mean(Distortion)) + ' +/- ' + str(np.std(Distortion)))
+print('Accuracy under adversarial attack: ' + str(np.mean(Adv)) + ' +/- ' + str(np.std(Adv)))
+print('Energy : ' + str(np.mean(Energy)) + ' +/- ' + str(np.std(Energy)))
+
+
+
+
 
 
 """      

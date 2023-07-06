@@ -178,9 +178,8 @@ Distortion=[]
 Adv=[]
 J_norm=[]
 Energy=[]
-for i in range(20):
-        print(i)
-        print(alpha)
+for i in range(10):
+        print('Iteration number : '+str(i))
         torch.manual_seed(i)
         model=ResNet(g(methode), 10, 0.1)
         model=model.to('cuda')

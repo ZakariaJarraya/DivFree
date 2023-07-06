@@ -1,115 +1,113 @@
-import torch.nn.functional as F
-from data import data as dt
-from model import lyapunov
-from plot import plot_lyapunov as pl
-from plot import plot_field as p
-from model import resnet as rs
-from model import approximator as app
-from trainer import approximator_trainer as app_trainer
-from trainer import resnet_trainer
-#from plot import plot_animation as anime
-from matplotlib.animation import FuncAnimation
-import numpy as np
-from plot import animate_lyapunov as anime 
-import matplotlib.animation as animation
-
 import torch
 import matplotlib.pyplot as plt
-import umap.umap_ as umap
-import seaborn as sns
-import torch.nn as nn
-if torch.cuda.is_available():
-    torch.backends.cudnn.deterministic = True
-
-CUDA_LAUNCH_BLOCKING=1
-
-DEVICE = "cuda:0"
-GRAYSCALE = True
-
-import gc
-
-gc.collect()
-
-torch.cuda.empty_cache()
-
-
-device = torch.device(DEVICE)
+from sklearn.model_selection import train_test_split
+import random
+import sklearn.datasets
+from math import pi
+import numpy as np
+from model_ import *
+from dynamic import *
+from metric import *
+from sklearn import preprocessing
+import argparse
 
 
 
+random.seed(1)
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 
+torch.manual_seed(0)
 
-#fig = plt.figure()
-#ax = plt.axes(projection='3d')
-"""
-mean1=torch.tensor([0.,0.])
-mean2=torch.tensor([3.,3.])
-covariance1=torch.tensor([[1.,0.],[0.,1.]])
-covariance2=torch.tensor([[1.,0.],[0.,1.]])
+methodes=['Baseline','DivFree','Lyapunov','Penalizaion','neurips','NICE']
+
+donnees=['Moons','Spirals','Gaussian']
 
 
 
 
+##saisir les choix
+
+print('Choisir le numéro du jeu de donnée:')
+
+for i in range(len(donnees)):
+    print(str(i)+')-'+ ' '+ donnees[i])
+
+donnee=input('')    
 
 
+print("Choisir le numéro de l'algorithme:")
 
-data_choice=int(input('choose between 1(two_circles), 2(two_moons) and 3(two_gaussians): '))
-class_size=int(input('choose class size: '))
+for i in range(len(methodes)):
+    print(str(i)+')-'+ ' '+ methodes[i])
 
+methode=input('')   
 
-data=dt.DATA(data_choice,class_size,mean1,mean2,covariance1,covariance2)
-
-
-
-data.load()
-
-
-X,Y,X0,X1= data.prepare()
+donnee=int(donnee)
+methode=int(methode)
 
 
+penalization=(methode==3)
+alpha=0
+if penalization:
+    alpha=int(input('saisir le coefficient de pénalisation'))
 
 
 
 
 
+##creation des donnees
+
+
+
+def create_data(donnee,taille):
+    if donnee==0:
+        x, y = sklearn.datasets.make_moons(n_samples=taille, shuffle=True, noise=None, random_state=1)
+        scaler = preprocessing.StandardScaler().fit(x)
+        x = scaler.transform(x)
+        x, y = torch.tensor(x), torch.tensor(y)
+        x.requires_grad=True
+        x, y = x.to(device).float(), y.to(device)
+        return x, y
+    elif donnee==1:
+        N = int(taille/2)
+        theta = 1.*np.sqrt(np.random.rand(N))*2*pi # np.linspace(0,2*pi,100)
+        r_a = 2*theta + pi
+        data_a = np.array([np.cos(theta)*r_a, np.sin(theta)*r_a]).T
+        x_a = data_a + np.random.randn(N,2)
+        x_a=torch.tensor(x_a)
+        r_b = -2*theta - pi
+        data_b = np.array([np.cos(theta)*r_b, np.sin(theta)*r_b]).T
+        x_b = data_b + np.random.randn(N,2)
+        x_b=torch.tensor(x_b)
+        x=torch.cat((x_a,x_b),0)
+        scaler = preprocessing.StandardScaler().fit(x)
+        x = scaler.transform(x)
+        x=torch.tensor(x)
+        x.requires_grad=True
+        l1=torch.tensor([0. for i in range(N)])
+        l2=torch.tensor([1. for i in range(N)])
+        y=torch.cat((l1,l2),dim=0).view(-1,1)
+        x, y = x.to(device).float(), y.to(device)
+        return x, y    
 
 
 
 
-a=lyapunov.lyapunov(c1=mean1,c2=mean2)
-
-residual_block=lyapunov.grad(a)
+x, y = create_data(donnee,1000)
 
 
-#residual_block=app.V(2,2,2)
-
-#residual_block=lyapunov.dynamics_init()
-print(a.c1)
-print(a.c2)
-pl.plot_lyapunov(X,X0,X1,a,numpoints=40)
-reseau=rs.resnet(2,2,2,residual_block)
-embedder=app.V(2,2,2)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
 
 
-
-grad=resnet_trainer.train(embedder,reseau,a,X,Y,num_epochs=100)
-print(a.c1)
-print(a.c2)
-for i in range(len(grad)):
-    if i % 2 == 0:
-        grad[i]=grad[i][0]
-grad=np.array(grad)
-
-#p.plot_vector_field(X,X0,X1,reseau,20)
-
-print(torch.sum(torch.tensor(torch.round(reseau(X,30))==Y))/len(Y))
-
-
-#anime.plot(reseau,grad)
-
-#anime.plot(grad, X, X0, X1, a)
+def g(methode):
+    if int(methode)==0 or int(methode)==3:
+        return unconstrained_dynamic()
+    elif int(methode)==1:
+        return divfree_dynamic()
+    elif int(methode)==2:
+        return grad_potential_dynamic()
 
 
 
@@ -117,253 +115,293 @@ print(torch.sum(torch.tensor(torch.round(reseau(X,30))==Y))/len(Y))
 
 
 
+def create_spiral(taille,longueur):
+            random.seed(1)
+            np.random.seed(seed=1)
+            N = int(taille/2)
+            theta = longueur*np.sqrt(np.random.rand(N))*2*pi # np.linspace(0,2*pi,100)
+            r_a = 2*theta + pi
+            data_a = np.array([np.cos(theta)*r_a, np.sin(theta)*r_a]).T
+            x_a = data_a + np.random.randn(N,2)
+            x_a=torch.tensor(x_a)
+            r_b = -2*theta - pi
+            data_b = np.array([np.cos(theta)*r_b, np.sin(theta)*r_b]).T
+            x_b = data_b + np.random.randn(N,2)
+            x_b=torch.tensor(x_b)
+            x=torch.cat((x_a,x_b),0)
+            scaler = preprocessing.StandardScaler().fit(x)
+            x = scaler.transform(x)
+            x=torch.tensor(x)
+            x.requires_grad=True
+            l1=torch.tensor([0. for i in range(N)])
+            l2=torch.tensor([1. for i in range(N)])
+            y=torch.cat((l1,l2),dim=0).view(-1,1)
+            x, y = x.to(device).float(), y.to(device)
+            return x,y
 
 
-fig, ax = plt.subplots(figsize=(4,4))
-color= ['red' if l == 0. else 'green' for l in Y]
-i=0
-data_temp=grad[0:2]
-def update(f):
-            global data_temp, i
+
+
+
+
+
+def animate_reseau(i):
+        x , y = create_spiral(1000*(2-(i/10)),2-(i/10))
+        a, x, b, y=  train_test_split(x, y, test_size=0.25, random_state=42)
+        network=torch.load('/home/zakaria/Bureau/projet-lyapunov/spiral-unroll/'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(2-(i/10))+'-'+str(0))
+        x_min, x_max = -3, 3
+        y_min, y_max = -3, 3
+        h = 0.1
+        xx,yy=np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+        # Predict the function value for the whole gid
+        f=torch.tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device)
+        f.requires_grad=True
+        Z = network(f)[1][:,0]   
+        Z = Z.reshape(xx.shape)
+        # Plot the contour and training examples
+        Z=Z.detach().cpu().numpy()
+        x=x.detach().cpu().numpy()
+        plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
+        plt.scatter(x[:, 0], x[:, 1], c=y.detach().cpu().numpy(), cmap=plt.cm.binary)  
+        plt.show()
+
+
+
+
+
+
+
+Score=[]
+V_inter=[]
+V_intra=[]
+Distortion=[]
+Adv=[]
+J_norm=[]
+Energy=[]
+for i in range(20):
+        print(i)
+        print(alpha)
+        torch.manual_seed(i)
+        model=ResNet(g(methode), 10, 0.1)
+        model=model.to('cuda')
+        train(model,penalization,x_train,y_train,alpha,100)
+        Score.append(acc(model,x_test,y_test))
+        V_inter.append(variance_inter(last_layer(model,x_test),y_test).item())
+        V_intra.append(variance_intra(last_layer(model,x_test),y_test).item())
+        Distortion.append(lq_distortion(model,x_test).item())
+        Adv.append(acc(model,test(model, x_test, y_test, 0.1),y_test))
+        Energy.append(energy(model,x_test))
+        #torch.save(model, '/home/zakaria/Bureau/projet-lyapunov/lambda-models/'+'-'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(i)+'-'+str(alpha))
+        
+
+
+"""      
+def create_spiral(taille,longueur):
+            random.seed(1)
+            N = int(taille/2)
+            theta = longueur*np.sqrt(np.random.rand(N))*2*pi # np.linspace(0,2*pi,100)
+            r_a = 2*theta + pi
+            data_a = np.array([np.cos(theta)*r_a, np.sin(theta)*r_a]).T
+            x_a = data_a + np.random.randn(N,2)
+            x_a=torch.tensor(x_a)
+            r_b = -2*theta - pi
+            data_b = np.array([np.cos(theta)*r_b, np.sin(theta)*r_b]).T
+            x_b = data_b + np.random.randn(N,2)
+            x_b=torch.tensor(x_b)
+            x=torch.cat((x_a,x_b),0)
+            scaler = preprocessing.StandardScaler().fit(x)
+            x = scaler.transform(x)
+            x=torch.tensor(x)
+            x.requires_grad=True
+            l1=torch.tensor([0. for i in range(N)])
+            l2=torch.tensor([1. for i in range(N)])
+            y=torch.cat((l1,l2),dim=0).view(-1,1)
+            x, y = x.to(device).float(), y.to(device)
+            return x,y
+
+
+
             
-            
-            
-            ax.clear()
-            ax.set_xlim(1.5*np.min(grad[:,0]),1.5*np.max(grad[:,0]))
-            ax.set_ylim(1.5*np.min(grad[:,1]),1.5*np.max(grad[:,1]))
-            
-
-            
-
-
-
-            #ax.set_xlim(1.5*xmin,1.5*xmax)
-            #ax.set_ylim(1.5*ymin,1.5*ymax)
-            #ax.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto', cmap=plt.cm.Greens_r)
-            #newline([1.5,1.5],[0.,3.])
-            #ax.quiver(g,h,k,l,EE,cmap='gist_gray')
-            #ax.set_axis_off()
-            ax.scatter(data_temp[:,0], data_temp[:,1])
-            ax.scatter(X[:,0], X[:,1], color=color)
-            
+Score=[]
+V_inter=[]
+V_intra=[]
+Distortion=[]
+Adv=[]
+J_norm=[]
+Energy=[]
+Free=[]
 
 
-            i=i+2
-            i=i%148
-            data_temp=grad[i:i+2]
+Score1=[]
+V_inter1=[]
+V_intra1=[]
+Distortion1=[]
+Adv1=[]
+J_norm1=[]
+Energy1=[]
+Free1=[]
+
+
+
+
+
+for i in range(1):
+    #alpha=pow(10,i)
+    print(i)
+    Score_=[]
+    V_inter_=[]
+    V_intra_=[]
+    Distortion_=[]
+    Adv_=[]
+    J_norm_=[]
+    Energy_=[]
+    Free_=[]
+    for j in range(20):
+        print(j)
+        torch.manual_seed(j)
+        model=ResNet(g(methode), 10, 0.1)
+        model=model.to('cuda')
+        train(model,x_train,y_train)
+        #model=torch.load('/home/zakaria/Bureau/projet-lyapunov/lambda-models/'+'-'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(j)+'-'+str(alpha))
+        #Free_.append(div(model.g,x_test).mean().item())
+        Score_.append(acc(model,x_test,y_test))
+        V_inter_.append(variance_inter(last_layer(model,x_test),y_test).item())
+        V_intra_.append(variance_intra(last_layer(model,x_test),y_test).item())
+        Distortion_.append(lq_distortion(model,x_test).item())
+        Adv_.append(acc(model,test(model, x_test, y_test, 0.1),y_test))
+        Energy_.append(energy(model,x_test))
+    Score.append(np.mean(Score_))
+    Score1.append(np.std(Score_))    
+    V_inter.append(np.mean(V_inter_))
+    V_inter1.append(np.std(V_inter_)) 
+    V_intra.append(np.mean(V_intra_))
+    V_intra1.append(np.std(V_intra_)) 
+    Distortion.append(np.mean(Distortion_))
+    Distortion1.append(np.std(Distortion_)) 
+    Adv.append(np.mean(Adv_))
+    Adv1.append(np.std(Adv_)) 
+    Free.append(np.mean(Free_))
+    Free1.append(np.std(Free_)) 
+    Energy.append(np.mean(Energy_))
+    Energy1.append(np.std(Energy_)) 
+        
+
+
+for i in range(10):
+    print(i)
+    x , y = create_spiral(1000*(2-(i/10)),2-(i/10))
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
+    model=torch.load('/home/zakaria/Bureau/projet-lyapunov/spiral-unroll/'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(2-(i/10))+'-'+str(j))
+    Score_=[]
+    V_inter_=[]
+    V_intra_=[]
+    Distortion_=[]
+    Adv_=[]
+    J_norm_=[]
+    Energy_=[]
+    for j in range(20):
+        print(j)
+        torch.manual_seed(j)
+        torch.load(model, '/home/zakaria/Bureau/projet-lyapunov//'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(2-(i/10))+'-'+str(j))
+
+
+
         
 
 
 
-        #call the animation and save
-p = FuncAnimation(fig, update, interval=150, frames=range(150))
-#p.save('8-5.gif', writer='pillow')
 
 
 
 
 
+def animation(model,x,y,methode,donnee,f):
+    from matplotlib.animation import FuncAnimation
+    activation = {}
+    def get_activation(name):
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    fig, ax = plt.subplots(figsize=(4,4))
+    color= ['Blue' if l == 0. else 'red' for l in y]
+    def animate_reseau(i):
+            x , y = create_spiral(1000*(2-(i/10)),2-(i/10))
+            a, x, b, y= train_test_split(x, y, test_size=0.25, random_state=42)
+            network=torch.load('/home/zakaria/Bureau/projet-lyapunov/spiral-unroll/'+methodes[int(methode)]+'-'+donnees[int(donnee)]+'-'+str(2-(i/10))+'-'+str(0))
+            x_min, x_max = -3, 3
+            y_min, y_max = -3, 3
+            h = 0.1
+            xx,yy=np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+            # Predict the function value for the whole gid
+            f=torch.tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device)
+            f.requires_grad=True
+            Z = network(f)[1][:,0]   
+            Z = Z.reshape(xx.shape)
+            # Plot the contour and training examples
+            Z=Z.detach().cpu().numpy()
+            x=x.detach().cpu().numpy()
+            plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
+            plt.scatter(x[:, 0], x[:, 1], c=y.detach().cpu().numpy(), cmap=plt.cm.binary)  
+            plt.show()
+    p = FuncAnimation(fig, animate_reseau, interval=200, frames=range(10))
+    p.save('decision'+'-'+donnees[int(donnee)]+'-'+str(0)+'.gif', writer='pillow')      
 
 
 
-
-
-
-   
-
-"""
-d=2
-fig = plt.figure()
-ax = plt.axes(projection='3d')
-
-mean1=0*torch.ones(1, d)
-mean2=3*torch.ones(1, d)
-covariance1=torch.eye(d)
-covariance2=torch.eye(d)
-
-
-
-
-
-data_choice=int(input('choose between 1(two_circles), 2(two_moons) and 3(two_gaussians): '))
-class_size=int(input('choose class size: '))
-
-
-data=dt.DATA(data_choice,class_size,mean1,mean2,covariance1,covariance2)
-
-
-
-data.load()
-
-
-X,Y,X0,X1= data.prepare()
-
-#for i in range(len(Y)):
-    #X[i]=X[i].to(device)
-    #Y[i]=Y[i].to(device)
-
-a=lyapunov.lyapunov(mean1,mean2, d)
-
-residual_block=lyapunov.grad(a, d)
-residual_block=lyapunov.dynamics_init(mean1,mean2, d)
-
-#residual_block=app.V(50,50,50)
-
-#residual_block=lyapunov.dynamics_init()
-print(a.c1)
-print(a.c2)
-#pl.plot_lyapunov(X,X0,X1,a,numpoints=40)
-reseau=rs.resnet(d,ResidualBlock=residual_block)
-
-#reseau.to(DEVICE)
-
-X=X.view(-1,d)
-
-
-grad=resnet_trainer.train(reseau,X,Y,d,num_epochs=100)
-print(a.c1)
-print(a.c2)
-#for i in range(len(grad)):
-    #if i % 2 == 0:
-        #grad[i]=grad[i][0]
-#grad=np.array(grad)
-
-#p.plot_vector_field(X,X0,X1,reseau,20)
-
-#print(torch.sum(torch.tensor(torch.round(reseau(X.view(-1,d),30))==Y))/len(Y))
- 
-
-embedding = umap.UMAP().fit_transform(X.view(-1,d).cpu().detach().numpy())
-
-
-col0=[]
-for i in range(len(embedding[:,0])):
-    col0.append(embedding[:,0][i])
-
-
-
-col1=[]
-for i in range(len(embedding[:,1])):
-    col1.append(embedding[:,1][i])   
-
-
-
-
-
-
-
-
-
-def fgsm_attack(image, epsilon, data_grad):
-    # Collect the element-wise sign of the data gradient
-    sign_data_grad = data_grad.sign()
-    # Create the perturbed image by adjusting each pixel of the input image
-    perturbed_image = image + epsilon*sign_data_grad
-    # Adding clipping to maintain [0,1] range
-    perturbed_image = torch.clamp(perturbed_image, -5, 5)
-    # Return the perturbed image
-    return perturbed_image
-
-
-
-
-
-
-
-
-
-def test( model, X, Y, epsilon):
-
-    # Accuracy counter
-    correct = 0
-    adv_examples = []
-
-    # Loop over all examples in test set
-    for i in range(len(Y)):
-
-
-
-        # Set requires_grad attribute of tensor. Important for Attack
-        s=X[i].clone().detach().requires_grad_(True)
-        #s=s.view(-1,d)
-
-        #s=s.view(-1,d)
-        # Forward pass the data through the model
-        output = model(s.view(-1,d))[1]
-        #init_pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
-        #output=output.view(1)
-
-        criterion = nn.CrossEntropyLoss()
-        # Calculate the loss
-        loss = criterion(output, Y[i].long())
-
-        # Zero all existing gradients
-        model.zero_grad()
-
-        # Calculate gradients of model in backward pass
-        loss.backward(retain_graph=True)
-
-        # Collect datagrad
-        data_grad = s.grad.data
-
-        # Call FGSM Attack
-        perturbed_data = fgsm_attack(s, epsilon, data_grad)
-
-        # Re-classify the perturbed image
-        adv_examples.append(perturbed_data)
-
-    return adv_examples    
-
-
-
-
-
-
-activation = {}
-def get_activation(name):
-    def hook(model, input, output):
-        activation[name] = output.detach()
-    return hook
-
-
-network=app.V(d,70,d)
-#network.to(DEVICE)
-grad=resnet_trainer.train(network,X,Y,d,num_epochs=100)
-
-
-def acc(network, liste, Y):
-     acc=0
-     indice=[]
-     for i in range(len(Y)):
-            if torch.argmax(network(liste[i].view(-1,d))[1])==Y[i]:
-                     acc+=1
-            else:
-                pass
-                indice.append(i)         
-     return acc/len(Y), indice
-
-
-
-
-
-
-
-def plot_decision_boundary(network,X,y):
-    fig = plt.figure()
     
-    # Set min and max values and give it some padding
-    x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
-    y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
-    h = 0.01
-    # Generate a grid of points with distance h between them
+model=ResNet(g(methode), 10, 0.1)
+model=model.to('cuda')
+train(model,x_train,y_train)
+
+
+
+
+
+
+
+def plot_decision_boundary(network,x,y,i):
+    fig = plt.figure()
+    import matplotlib as mpl
+    plt.clf()
+    x_min, x_max = -3, 3
+    y_min, y_max = -3, 3
+    color= ['Blue' if l == 0. else 'red' for l in y]
+    h = 0.1
     xx,yy=np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
     # Predict the function value for the whole gid
-    Z = torch.argmax(network(torch.tensor(np.c_[xx.ravel(), yy.ravel()]).float())[1],dim=1)   
+    f=torch.tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device)
+    f.requires_grad=True
+    Z = network(f)[1][:,0]   
     Z = Z.reshape(xx.shape)
     # Plot the contour and training examples
-    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
-    #plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.binary)     
-    plt.show()
+    Z=Z.detach().cpu().numpy()
+    x=x.detach().cpu().numpy()
+    cmap = mpl.cm.RdBu
+    bounds = [0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
+    plt.contourf(xx, yy, Z, cmap=plt.cm.RdBu)
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap))    
+    plt.scatter(x[:, 0], x[:, 1], cmap=plt.cm.binary)     
+    plt.savefig('/home/zakaria/Bureau/projet-lyapunov/spiral-unroll/'+str(i)+'.png')     
+
+
+
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
